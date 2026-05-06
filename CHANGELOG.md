@@ -4,6 +4,7 @@
 
 - Add Cmd+= / Cmd+- / Cmd+0 to scale the editor font size (1px steps, clamped 10–32, persisted via `editor.font-size`).
 - Add a settings gear button to the sidebar so users discover Preferences without using search. Closes joelbqz/writer-computer#22.
+- Restore the default arrow cursor when hovering over a tab filename instead of the I-beam text cursor. Closes joelbqz/writer-computer#24.
 - Harden Tauri filesystem IPC so renderer-provided paths must resolve inside the current workspace before read, write, create, rename, delete, existence, reveal, or restore-prefetch operations run. Adds a `Forbidden` error and regression tests for traversal, outside absolute paths, creatable parents, and symlink escapes. See `SPECs/workspace-path-confinement-spec.md`.
 - Remove sidebar directory-listing title extraction from the hot path, virtualize large sidebar file trees, and reject markdown files over 10 MiB before serializing them through Tauri IPC. See `SPECs/performance-silent-killers-spec.md`.
 - Reduce editor keystroke work by marking files dirty synchronously but debouncing full document materialization, title inference, stats recomputation, and autosave scheduling. Cache sanitized HTML block decorations and pre-lowercase indexed search paths for command-palette queries.
