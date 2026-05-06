@@ -65,27 +65,9 @@ fn resolve_kokoro_path() -> Option<PathBuf> {
 
 /// Returns the absolute path to a usable `kokoro` binary, or `None` if
 /// nothing matches. The frontend caches the result for the session.
-///
-/// Logs to stderr so first-launch failures are debuggable via Console.app
-/// even when DevTools isn't reachable.
 #[tauri::command]
 pub async fn kokoro_probe() -> Option<String> {
-    let resolved = resolve_kokoro_path();
-    eprintln!(
-        "[kokoro_probe] HOME={:?} resolved={:?}",
-        std::env::var("HOME").ok(),
-        resolved
-    );
-    if resolved.is_none() {
-        for c in standard_kokoro_candidates() {
-            eprintln!(
-                "[kokoro_probe]   candidate {} exists={}",
-                c.display(),
-                c.exists()
-            );
-        }
-    }
-    resolved.map(|p| p.to_string_lossy().to_string())
+    resolve_kokoro_path().map(|p| p.to_string_lossy().to_string())
 }
 
 /// Spawn `kokoro` to synthesize one block of text to a temp WAV in the app's
