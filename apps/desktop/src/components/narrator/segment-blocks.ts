@@ -1,3 +1,32 @@
+/** Strip residual punctuation that TTS engines tend to pronounce literally
+ *  ("quote", "open paren") or that adds awkward pauses. Run AFTER block
+ *  segmentation — segmentation is about block boundaries, this is about
+ *  "what should the synth actually say". Single-pass regex chain so the
+ *  cost stays linear in block length. */
+export function sanitizeForTts(text: string): string {
+  return (
+    text
+      // HTML tags that escaped the markdown stripper (rare but happens with
+      // raw HTML inside paragraphs).
+      .replace(/<[^>]+>/g, " ")
+      // Quote marks: ASCII straight quotes, smart quotes, French/Portuguese
+      // guillemets, German low-9, Japanese 「」. All pronounced as "quote"
+      // by most TTS engines — drop entirely.
+      .replace(/[“”„‟"«»‹›「」『』]/g, "")
+      .replace(/['‘’‚‛]/g, "")
+      // Backticks, pipes, square brackets, curly braces — markdown / table
+      // syntax that occasionally leaks past the block-level stripper.
+      .replace(/[`|[\]{}]/g, " ")
+      // Bare URLs — let the engine say "link" rather than spelling out the
+      // URL character by character. Match http(s) and www.
+      .replace(/https?:\/\/\S+/g, " link ")
+      .replace(/\bwww\.\S+/g, " link ")
+      // Multiple spaces / leftover whitespace from substitutions above.
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
 export function segmentBlocks(
   markdown: string,
   opts: { skipCodeBlocks: boolean; skipFrontmatter: boolean },
@@ -54,6 +83,10 @@ export function segmentBlocks(
 
     // Drop horizontal rules
     if (/^[-*_]{3,}$/.test(block)) continue;
+
+    // Strip residual TTS-noisy punctuation (smart quotes, brackets, URLs, …).
+    // Done last so block boundary detection above isn't confused by quotes.
+    block = sanitizeForTts(block);
 
     if (block.length > 0) {
       result.push(block);

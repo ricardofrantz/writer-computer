@@ -16,6 +16,24 @@ import { useEditorStore } from "@/stores/editor-store";
 import * as editorApi from "@/hooks/editor-api";
 import { useAllSettings, useSetSetting } from "@/hooks/use-settings";
 
+/** Read the user's live text selection from inside any CodeMirror editor.
+ *  CodeMirror renders source text via a contenteditable, so the browser's
+ *  selection API mirrors the source string — no need to plumb the
+ *  EditorView reference all the way to this component. Returns the empty
+ *  string if no selection is in an editor surface. */
+function readEditorSelection(): string {
+  const sel = typeof window === "undefined" ? null : window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return "";
+  // Confirm the selection lives inside a CodeMirror editor — otherwise we
+  // risk grabbing text from the sidebar, settings, etc.
+  const anchor = sel.anchorNode;
+  const inEditor =
+    anchor instanceof Node &&
+    (anchor as Element | Text).parentElement?.closest(".cm-editor") !== null;
+  if (!inEditor) return "";
+  return sel.toString();
+}
+
 interface IconButtonProps {
   label: string;
   onClick: () => void;
@@ -26,6 +44,10 @@ function IconButton({ label, onClick, children }: IconButtonProps) {
   return (
     <button
       type="button"
+      // Preserve any active editor selection — preventDefault on mousedown
+      // stops the browser from shifting focus to the button, which would
+      // otherwise collapse the user's selection before our onClick reads it.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       aria-label={label}
       title={label}
@@ -93,9 +115,19 @@ export function NarratorTransportBar() {
   if (!isOpen) return null;
 
   function handlePlay() {
-    const path = editorApi.getActiveFilePath();
-    const file = path ? editorApi.getOpenFile(path) : null;
-    const text = file?.content ?? "";
+    // Prefer the user's live selection — works for both Apple and Kokoro
+    // engines because CodeMirror's contenteditable mirrors the markdown
+    // source directly (no rendered DOM gap). Falls back to the whole
+    // document when nothing is selected.
+    const selected = readEditorSelection();
+    let text: string;
+    if (selected) {
+      text = selected;
+    } else {
+      const path = editorApi.getActiveFilePath();
+      const file = path ? editorApi.getOpenFile(path) : null;
+      text = file?.content ?? "";
+    }
     const skipCodeBlocks = (settings["narrator.skip-code-blocks"] as boolean) ?? true;
     const skipFrontmatter = (settings["narrator.skip-frontmatter"] as boolean) ?? true;
     const segments = segmentBlocks(text, { skipCodeBlocks, skipFrontmatter });
