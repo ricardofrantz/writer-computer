@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Restore the default arrow cursor when hovering over a tab filename instead of the I-beam text cursor. Closes joelbqz/writer-computer#24.
+
 ## 2026-05-04
 
 - Update the app icon.
