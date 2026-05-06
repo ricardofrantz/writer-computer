@@ -11,6 +11,7 @@ import {
 import { useNarratorStore } from "./narrator-store";
 import { narratorEngine } from "./narrator-engine";
 import { segmentBlocks } from "./segment-blocks";
+import { PLANNED_ENGINES } from "./engines";
 import { useEditorStore } from "@/stores/editor-store";
 import * as editorApi from "@/hooks/editor-api";
 import { useAllSettings, useSetSetting } from "@/hooks/use-settings";
@@ -40,6 +41,8 @@ export function NarratorTransportBar() {
   const playState = useNarratorStore((s) => s.playState);
   const currentBlockIndex = useNarratorStore((s) => s.currentBlockIndex);
   const totalBlocks = useNarratorStore((s) => s.totalBlocks);
+  const activeEngineId = useNarratorStore((s) => s.activeEngineId);
+  const setActiveEngine = useNarratorStore((s) => s.setActiveEngine);
   // Subscribe reactively so the component re-renders when the active file changes.
   // We don't use this value directly — editorApi.getActiveFilePath() is called at
   // play time to ensure we read the latest value.
@@ -118,6 +121,25 @@ export function NarratorTransportBar() {
             {currentBlockIndex + 1}/{totalBlocks}
           </span>
         )}
+        <select
+          value={activeEngineId}
+          onChange={(e) => setActiveEngine(e.target.value)}
+          aria-label="Engine"
+          className="max-w-[140px] rounded-md bg-[var(--surface-input)] px-1.5 text-[12px] text-[var(--text-primary)] outline-none h-[var(--chrome-control-height)]"
+        >
+          {PLANNED_ENGINES.map((engine) => (
+            <option
+              key={engine.id}
+              value={engine.id}
+              disabled={engine.status === "coming-soon"}
+              title={engine.note}
+            >
+              {engine.status === "coming-soon"
+                ? `${engine.displayName} (coming soon)`
+                : engine.displayName}
+            </option>
+          ))}
+        </select>
         {voices.length > 0 && (
           <select
             value={voiceName}

@@ -1,47 +1,26 @@
+// Thin dispatcher that delegates to the active TTS adapter. The public API
+// stays byte-identical to the pre-Phase-0 shape so existing call sites
+// (transport-bar, selection-tooltip, use-prosemark-editor, sidebar narrator
+// button, keyboard shortcut handler) keep working without changes.
+
+import { getAdapterById } from "./engines";
+import {
+  appleAdapter,
+  appleSkipNext,
+  appleSkipPrevious,
+  getAppleNativeVoices,
+} from "./engines/apple";
 import { useNarratorStore } from "./narrator-store";
 
-let blocks: string[] = [];
-let currentIndex = 0;
-let currentOpts: { voice?: SpeechSynthesisVoice; rate: number; pitch: number } = {
-  rate: 1,
-  pitch: 1,
-};
-const voicesChangedCallbacks = new Set<() => void>();
-
-if (typeof window !== "undefined") {
-  window.speechSynthesis.addEventListener("voiceschanged", () => {
-    voicesChangedCallbacks.forEach((cb) => cb());
-  });
+function adapter() {
+  return getAdapterById(useNarratorStore.getState().activeEngineId);
 }
 
-function speakCurrent(): void {
-  const { setPlayState, setProgress } = useNarratorStore.getState();
-  if (currentIndex >= blocks.length) {
-    setPlayState("idle");
-    return;
-  }
-  const utt = new SpeechSynthesisUtterance(blocks[currentIndex]);
-  utt.rate = currentOpts.rate;
-  utt.pitch = currentOpts.pitch;
-  if (currentOpts.voice) {
-    utt.voice = currentOpts.voice;
-  }
-  utt.onend = () => {
-    currentIndex++;
-    useNarratorStore.getState().setProgress(currentIndex, blocks.length);
-    speakCurrent();
-  };
-  utt.onerror = () => {
-    useNarratorStore.getState().setPlayState("idle");
-  };
-  window.speechSynthesis.speak(utt);
-  setPlayState("playing");
-  setProgress(currentIndex, blocks.length);
-}
+let lastCallbacks: import("./engines").PlayCallbacks | null = null;
 
 export const narratorEngine = {
   play(
-    newBlocks: string[],
+    blocks: string[],
     opts: {
       voice?: SpeechSynthesisVoice;
       rate: number;
@@ -49,62 +28,76 @@ export const narratorEngine = {
       startIndex?: number;
     },
   ): void {
-    blocks = newBlocks;
-    currentIndex = opts.startIndex ?? 0;
-    currentOpts = { voice: opts.voice, rate: opts.rate, pitch: opts.pitch };
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    speakCurrent();
+    const a = adapter();
+    const voiceId = opts.voice?.name ?? null;
+    const callbacks = {
+      onBoundary: () => {
+        // Karaoke wiring lands in Phase 2 of #19. Boundary events are
+        // accepted now so the adapter contract is stable; nothing consumes
+        // them yet.
+      },
+      onProgress: (currentIndex: number, total: number) =>
+        useNarratorStore.getState().setProgress(currentIndex, total),
+      onEnd: () => useNarratorStore.getState().setPlayState("idle"),
+    };
+    lastCallbacks = callbacks;
+    a.play(
+      blocks,
+      {
+        voiceId,
+        rate: opts.rate,
+        pitch: opts.pitch,
+        startIndex: opts.startIndex ?? 0,
+      },
+      callbacks,
+    );
+    useNarratorStore.getState().setPlayState("playing");
   },
 
   pause(): void {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.pause();
+    adapter().pause();
     useNarratorStore.getState().setPlayState("paused");
   },
 
   resume(): void {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.resume();
+    adapter().resume();
     useNarratorStore.getState().setPlayState("playing");
   },
 
   stop(): void {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    blocks = [];
-    currentIndex = 0;
+    adapter().cancel();
+    lastCallbacks = null;
     useNarratorStore.getState().setPlayState("idle");
     useNarratorStore.getState().setProgress(0, 0);
   },
 
   skipNext(): void {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    currentIndex++;
-    if (currentIndex >= blocks.length) {
-      useNarratorStore.getState().setPlayState("idle");
-      return;
+    // Apple-specific advance helper — keeps mid-queue navigation working.
+    // Other adapters will register their own skip helpers as they ship.
+    if (adapter().id === "apple") {
+      appleSkipNext(lastCallbacks);
     }
-    speakCurrent();
   },
 
   skipPrevious(): void {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    currentIndex = Math.max(0, currentIndex - 1);
-    speakCurrent();
+    if (adapter().id === "apple") {
+      appleSkipPrevious();
+    }
   },
 
   getVoices(): SpeechSynthesisVoice[] {
-    if (typeof window === "undefined") return [];
-    return window.speechSynthesis.getVoices();
+    // Back-compat: callers (selection-tooltip, transport-bar's voice picker,
+    // right-click handler) destructure SpeechSynthesisVoice fields. Returning
+    // the native list when the active engine is Apple keeps them working
+    // unchanged. Non-Apple engines return [] — the transport's voice picker
+    // already gates rendering on this.
+    if (adapter().id === "apple") return getAppleNativeVoices();
+    return [];
   },
 
   onVoicesChanged(cb: () => void): () => void {
-    voicesChangedCallbacks.add(cb);
-    return () => {
-      voicesChangedCallbacks.delete(cb);
-    };
+    // Apple's voiceschanged event fires once at startup on most systems.
+    // Forward it through the adapter so consumers refresh their picker.
+    return appleAdapter.onVoicesChanged(cb);
   },
 };

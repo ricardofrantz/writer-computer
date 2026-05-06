@@ -334,6 +334,15 @@
       "category": "Narrator",
       "type": "boolean",
       "default": true
+    },
+    {
+      "key": "narrator.engine",
+      "label": "Engine",
+      "description": "Text-to-speech engine. \"Apple\" uses your system voices; other engines may require model downloads.",
+      "category": "Narrator",
+      "type": "enum",
+      "options": ["apple"],
+      "default": "apple"
     }
   ]
 }
