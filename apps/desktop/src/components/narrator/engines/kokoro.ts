@@ -60,7 +60,7 @@ export const kokoroAdapter: TtsAdapter = {
     if (probedPath !== undefined) return probedPath !== null;
     try {
       const path = await invoke<string | null>("kokoro_probe");
-      probedPath = path ?? null;
+      probedPath = path && path.length > 0 ? path : null;
       return probedPath !== null;
     } catch {
       probedPath = null;
@@ -83,6 +83,18 @@ export const kokoroAdapter: TtsAdapter = {
     cancelled = false;
     void (async () => {
       try {
+        // Resolve the binary path once per play() — probe is cached, so this
+        // is free after the first call. We pass it to every synth so Rust
+        // doesn't re-do the lookup (and so we don't depend on PATH at all).
+        if (probedPath === undefined) {
+          await this.isAvailable();
+        }
+        if (!probedPath) {
+          console.error("[kokoro] not installed; engine should not have been selectable");
+          cb.onEnd();
+          return;
+        }
+        const binaryPath = probedPath;
         const ctx = getAudioContext();
         for (let i = opts.startIndex; i < blocks.length; i++) {
           if (cancelled) return;
@@ -90,6 +102,7 @@ export const kokoroAdapter: TtsAdapter = {
           const text = blocks[i].trim();
           if (!text) continue;
           const bytes = await invoke<number[]>("kokoro_synth", {
+            binaryPath,
             text,
             voice: opts.voiceId ?? "af_bella",
             speed: opts.rate,
