@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Add Cmd+= / Cmd+- / Cmd+0 to scale the editor font size (1px steps, clamped 10–32, persisted via `editor.font-size`).
+
 ## 2026-05-04
 
 - Update the app icon.

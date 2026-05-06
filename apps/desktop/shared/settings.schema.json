@@ -8,6 +8,9 @@
       "category": "Editor",
       "type": "number",
       "default": 16,
+      "min": 10,
+      "max": 32,
+      "step": 1,
       "cssVar": "--writer-editor-font-size",
       "cssFormat": "px"
     },

@@ -20,6 +20,9 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 | Cmd+1 ... Cmd+9 | Jump to Nth tab               |
 | Alt+ArrowLeft   | Navigate back                 |
 | Alt+ArrowRight  | Navigate forward              |
+| Cmd+= / Cmd++   | Increase editor font size     |
+| Cmd+-           | Decrease editor font size     |
+| Cmd+0           | Reset editor font size        |
 
 ## Editor Formatting
 
