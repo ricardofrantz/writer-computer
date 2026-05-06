@@ -388,6 +388,17 @@ function createEditorExtensions(
   isDisposed: () => boolean,
   setupCompartment: Compartment,
 ): Extension[] {
+  let contentTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const publishContentSoon = (view: EditorView) => {
+    if (contentTimer) clearTimeout(contentTimer);
+    contentTimer = setTimeout(() => {
+      contentTimer = null;
+      if (isDisposed()) return;
+      editorApi.updateContent(getFilePath(), view.state.doc.toString());
+    }, 300);
+  };
+
   return [
     markdown({
       codeLanguages: languages,
@@ -399,6 +410,11 @@ function createEditorExtensions(
     drawSelection(),
     prosemarkBaseThemeSetup(),
     search({ literal: true, createPanel: invisibleSearchPanel }),
+    // Match `editor-pane.tsx` top padding (`pt-32` / `md:pt-[9rem]`) so the
+    // translucent header doesn't occlude the highlighted match when findNext
+    // scrolls an off-screen hit into view. Bottom margin clears the search
+    // overlay (`bottom-2 right-3` ≈ 8px gap + ~50px tall).
+    EditorView.scrollMargins.of(() => ({ top: 144, bottom: 64 })),
     Prec.highest(
       keymap.of([
         {
@@ -435,7 +451,8 @@ function createEditorExtensions(
       // Skip updates from document swaps/reloads, which carry a "writer" userEvent.
       const isSwap = update.transactions.some((tr) => tr.isUserEvent("writer"));
       if (update.docChanged && !isSwap) {
-        editorApi.updateContent(getFilePath(), update.state.doc.toString());
+        editorApi.markDirty(getFilePath());
+        publishContentSoon(update.view);
       }
       if (update.selectionSet && !isSwap) {
         editorApi.updateCursorPos(getFilePath(), update.state.selection.main.head);

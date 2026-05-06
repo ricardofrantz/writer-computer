@@ -79,6 +79,7 @@ interface EditorState {
     activeIndex: number | null,
     prefetchedActiveFile?: FileContent | null,
   ) => Promise<void>;
+  markDirty: (path: string) => void;
   updateContent: (path: string, content: string) => void;
   updateFrontmatter: (path: string, frontmatter: string | null) => void;
   markSaved: (path: string, diskContent: string, hasNewerChanges?: boolean) => void;
@@ -1020,6 +1021,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (shouldEnsureLauncher) get().ensureLauncherTab();
   },
 
+  markDirty: (path: string) => {
+    set((state) => {
+      const existing = state.openFiles.get(path);
+      if (!existing || existing.isDirty) return state;
+
+      const files = new Map(state.openFiles);
+      files.set(path, { ...existing, isDirty: true });
+      return { openFiles: files };
+    });
+  },
+
   updateContent: (path: string, content: string) => {
     const file = get().openFiles.get(path);
     if (!file) return;
@@ -1030,17 +1042,17 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       if (existing.content === content && existing.isDirty) return state;
 
       const { title, titleSource } = inferTitle(content, existing.frontmatter);
+      const nextFile = withDerivedStats({
+        ...existing,
+        content,
+        title: Object.is(existing.title, title) ? existing.title : title,
+        titleSource: Object.is(existing.titleSource, titleSource)
+          ? existing.titleSource
+          : titleSource,
+        isDirty: true,
+      });
       const files = new Map(state.openFiles);
-      files.set(
-        path,
-        withDerivedStats({
-          ...existing,
-          content,
-          title,
-          titleSource,
-          isDirty: true,
-        }),
-      );
+      files.set(path, nextFile);
       return { openFiles: files };
     });
 

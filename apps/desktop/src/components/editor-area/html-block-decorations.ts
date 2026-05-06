@@ -140,14 +140,31 @@ function convertMarkdownInHtml(html: string): string {
   return doc.body.innerHTML;
 }
 
+const SANITIZE_CACHE_MAX = 50;
+const sanitizeCache = new Map<string, string>();
+
 function sanitizeHTML(html: string): string {
+  const cached = sanitizeCache.get(html);
+  if (cached !== undefined) {
+    sanitizeCache.delete(html);
+    sanitizeCache.set(html, cached);
+    return cached;
+  }
+
   ensureSanitizer();
   const withMarkdown = convertMarkdownInHtml(html);
-  return DOMPurify.sanitize(withMarkdown, {
+  const sanitized = DOMPurify.sanitize(withMarkdown, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: false,
   });
+
+  sanitizeCache.set(html, sanitized);
+  if (sanitizeCache.size > SANITIZE_CACHE_MAX) {
+    const oldest = sanitizeCache.keys().next().value;
+    if (oldest !== undefined) sanitizeCache.delete(oldest);
+  }
+  return sanitized;
 }
 
 class HtmlBlockWidget extends WidgetType {

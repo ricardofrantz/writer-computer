@@ -55,6 +55,8 @@ pub struct WorkspaceState {
 pub struct IndexedFile {
     pub path: PathBuf,
     pub relative_path: String,
+    #[serde(skip, default)]
+    pub relative_path_lower: String,
     pub name: String,
 }
 

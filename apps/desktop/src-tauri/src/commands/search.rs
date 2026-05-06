@@ -103,7 +103,13 @@ fn fuzzy_search_from(
     let mut results: Vec<SearchResult> = index
         .iter()
         .filter_map(|file| {
-            let haystack = file.relative_path.to_lowercase();
+            let fallback_lower;
+            let haystack = if file.relative_path_lower.is_empty() {
+                fallback_lower = file.relative_path.to_lowercase();
+                &fallback_lower
+            } else {
+                &file.relative_path_lower
+            };
             let (byte_start, needle) = needles
                 .iter()
                 .filter_map(|needle| haystack.find(needle).map(|start| (start, needle)))
@@ -202,9 +208,11 @@ pub fn index_workspace_impl(
                         .unwrap_or(entry.path())
                         .to_string_lossy()
                         .to_string();
+                    let relative_path_lower = rel.to_lowercase();
                     results.lock().push(IndexedFile {
                         path: entry.path().to_path_buf(),
                         relative_path: rel,
+                        relative_path_lower,
                         name: entry.file_name().to_string_lossy().to_string(),
                     });
                 }
