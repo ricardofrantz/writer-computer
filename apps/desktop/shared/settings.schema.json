@@ -285,6 +285,52 @@
       "category": "Search",
       "type": "number",
       "default": 50
+    },
+    {
+      "key": "narrator.voice",
+      "label": "Voice",
+      "description": "Preferred voice for narration. Empty uses the system default.",
+      "category": "Narrator",
+      "type": "string",
+      "default": ""
+    },
+    {
+      "key": "narrator.rate",
+      "label": "Rate",
+      "description": "Speech rate multiplier (0.5 = half speed, 2.0 = double speed).",
+      "category": "Narrator",
+      "type": "range",
+      "min": 0.5,
+      "max": 2.0,
+      "step": 0.1,
+      "default": 1.0
+    },
+    {
+      "key": "narrator.pitch",
+      "label": "Pitch",
+      "description": "Voice pitch.",
+      "category": "Narrator",
+      "type": "range",
+      "min": 0,
+      "max": 2,
+      "step": 0.1,
+      "default": 1.0
+    },
+    {
+      "key": "narrator.skip-code-blocks",
+      "label": "Skip code blocks",
+      "description": "Skip fenced code blocks during narration.",
+      "category": "Narrator",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "narrator.skip-frontmatter",
+      "label": "Skip frontmatter",
+      "description": "Skip YAML/TOML frontmatter at the top of files during narration.",
+      "category": "Narrator",
+      "type": "boolean",
+      "default": true
     }
   ]
 }

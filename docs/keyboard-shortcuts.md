@@ -6,20 +6,21 @@ Canonical shortcut reference for Writer.
 
 These shortcuts are handled by the global `useKeyboardShortcuts` hook and work regardless of editor focus.
 
-| Shortcut        | Action                        |
-| --------------- | ----------------------------- |
-| Cmd+,           | Open settings                 |
-| Cmd+P           | File search (command palette) |
-| Cmd+O           | Go to file                    |
-| Cmd+N           | Create new note               |
-| Cmd+T           | New tab                       |
-| Cmd+W           | Close current tab             |
-| Cmd+\\          | Toggle sidebar                |
-| Ctrl+Tab        | Next tab                      |
-| Ctrl+Shift+Tab  | Previous tab                  |
-| Cmd+1 ... Cmd+9 | Jump to Nth tab               |
-| Alt+ArrowLeft   | Navigate back                 |
-| Alt+ArrowRight  | Navigate forward              |
+| Shortcut        | Action                         |
+| --------------- | ------------------------------ |
+| Cmd+,           | Open settings                  |
+| Cmd+P           | File search (command palette)  |
+| Cmd+O           | Go to file                     |
+| Cmd+N           | Create new note                |
+| Cmd+T           | New tab                        |
+| Cmd+W           | Close current tab              |
+| Cmd+\\          | Toggle sidebar                 |
+| Ctrl+Tab        | Next tab                       |
+| Ctrl+Shift+Tab  | Previous tab                   |
+| Cmd+1 ... Cmd+9 | Jump to Nth tab                |
+| Alt+ArrowLeft   | Navigate back                  |
+| Alt+ArrowRight  | Navigate forward               |
+| Cmd+Shift+L     | Open narrator (text-to-speech) |
 
 ## Editor Formatting
 

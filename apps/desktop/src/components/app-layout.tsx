@@ -4,6 +4,7 @@ import { EditorArea } from "./editor-area";
 import { EditorTabs } from "./editor-area/editor-tabs";
 import { SidebarToggleButton } from "./sidebar/sidebar-toggle-button";
 import { useSidebar } from "@/hooks/use-sidebar";
+import { NarratorTransportBar } from "./narrator/transport-bar";
 
 function clampSidebarWidth(width: number, maxSidebarWidth: number) {
   return Math.max(220, Math.min(maxSidebarWidth, Math.round(width)));
@@ -151,6 +152,7 @@ export function AppLayout() {
 
           <div className="relative min-w-0 flex-1 bg-bg">
             <EditorArea />
+            <NarratorTransportBar />
           </div>
         </div>
       </div>

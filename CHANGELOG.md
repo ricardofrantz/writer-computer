@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Add narrator mode (Cmd+Shift+L) — read the active document aloud via the system text-to-speech voice. Phase 1 of joelbqz/writer-computer#19 (no per-word highlighting yet).
+
 ## 2026-05-04
 
 - Update the app icon.
