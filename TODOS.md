@@ -40,6 +40,8 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 ### Performance and resilience
 
+- Asset protocol scope hardening — replace `assetProtocol.scope: ["**"]` with a workspace-aware or narrower image-loading path without breaking local markdown images.
+- CSP cleanup — remove `script-src 'unsafe-inline'` if Tauri/Vite production output allows it; keep style inline only if required by runtime theming.
 - Slow storage resilience: [`SPECs/slow-storage-resilience-spec.md`](SPECs/slow-storage-resilience-spec.md) — async title extraction + bounded timeout so iCloud / Dropbox / network-mount workspaces stay responsive. Storage-agnostic, no provider-specific path lists.
 - Workspace snapshot: [`SPECs/workspace-snapshot-spec.md`](SPECs/workspace-snapshot-spec.md) — architectural cleanup of `AppState` into a single versioned `Arc<Snapshot>` with inode-keyed entries and watcher-maintained titles. Follow-up to the workspace-switch-hang fix; pull in only if the current epoch/cancel primitives prove insufficient or if tags / new-tab-recents want the richer metadata.
 
@@ -47,6 +49,8 @@ Previously-triaged work organized by phase. Pull into `Up Next` as capacity open
 
 See `CHANGELOG.md` and `git log` for shipped work. Notable items:
 
+- Performance silent killers — directory listing no longer reads every markdown file for titles, large file trees are virtualized, and oversized file IPC is rejected before serialization
+- Workspace path confinement — Tauri FS IPC rejects renderer-provided paths that resolve outside the current workspace
 - Caret position after history navigation
 - Obsidian-style wikilink parsing — aliases, escaped table pipes, note fragments, same-file fragment links
 - Sidebar toggle tab chrome shift

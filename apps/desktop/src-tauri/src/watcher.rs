@@ -219,9 +219,11 @@ pub fn start_watcher(
                                             .file_name()
                                             .map(|n| n.to_string_lossy().to_string())
                                             .unwrap_or_default();
+                                        let relative_path_lower = rel.to_lowercase();
                                         state.file_index.write().push(crate::state::IndexedFile {
                                             path: path.clone(),
                                             relative_path: rel,
+                                            relative_path_lower,
                                             name,
                                         });
 

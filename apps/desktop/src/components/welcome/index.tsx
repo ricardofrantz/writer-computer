@@ -30,13 +30,13 @@ export function WelcomeScreen() {
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => void handleAddLocation()}
-            className="flex items-center gap-2 rounded-lg bg-[var(--text-primary)] px-4 py-2 text-[13px] font-medium text-[var(--surface-primary)] transition-opacity hover:opacity-90"
+            className="flex h-10 items-center gap-2 rounded-lg bg-[var(--text-primary)] px-4 text-[13px] font-medium text-[var(--surface-primary)] transition-[opacity,scale] hover:opacity-90 active:scale-[0.96]"
           >
             Add Folder
           </button>
           <button
             onClick={() => void handleOpenFile()}
-            className="flex items-center gap-2 rounded-lg border border-[var(--line-subtle)] px-4 py-2 text-[13px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-subtle)]"
+            className="flex h-10 items-center gap-2 rounded-lg border border-[var(--line-subtle)] px-4 text-[13px] font-medium text-[var(--text-secondary)] transition-[background-color,scale] hover:bg-[var(--surface-subtle)] active:scale-[0.96]"
           >
             Open File
           </button>

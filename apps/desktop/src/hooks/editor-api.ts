@@ -38,6 +38,10 @@ export function markSaved(path: string, diskContent: string) {
   useEditorStore.getState().markSaved(path, diskContent);
 }
 
+export function markDirty(path: string) {
+  useEditorStore.getState().markDirty(path);
+}
+
 export function updateContent(path: string, content: string) {
   useEditorStore.getState().updateContent(path, content);
 }

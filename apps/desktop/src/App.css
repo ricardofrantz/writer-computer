@@ -156,6 +156,26 @@ body,
   height: 100%;
   overflow: hidden;
   background: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Chrome headings (settings, dialogs). Editor markdown renders via prosemark
+   and wraps its own headings; this targets app chrome only. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  text-wrap: balance;
+}
+
+/* Keyboard hint chips often combine glyphs and letters at small sizes —
+   tabular alignment keeps the kerning steady. */
+kbd {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Prevent text selection everywhere except editor and form inputs */
@@ -223,6 +243,12 @@ input {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--line-subtler);
   border-radius: 16px;
+  /* Layered shadows give the dialog real lift over translucent chrome —
+     a single hard border reads as "drawn-on" against vibrancy. */
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 24px -8px rgba(0, 0, 0, 0.35),
+    0 24px 60px -12px rgba(0, 0, 0, 0.45);
   z-index: 101;
   overflow: hidden;
   /* Establish a stacking context so the opacity layer below stays inside. */

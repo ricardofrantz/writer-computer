@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   useDirectoryCache,
@@ -34,6 +34,10 @@ interface FileTreeProps {
   rootPath: string;
 }
 
+const ROW_HEIGHT = 33;
+const VIRTUAL_OVERSCAN = 12;
+const VIRTUALIZE_AFTER = 200;
+
 function getExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   if (dot <= 0) return "";
@@ -68,6 +72,8 @@ export function FileTree({ rootPath }: FileTreeProps) {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectionAnchor, setSelectionAnchor] = useState<string | null>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ scrollTop: 0, height: 0 });
 
   const entries = directoryCache.get(rootPath) ?? [];
 
@@ -78,6 +84,25 @@ export function FileTree({ rootPath }: FileTreeProps) {
     () => flattenTree(entries, 0, directoryCache, expandedDirs),
     [directoryCache, entries, expandedDirs],
   );
+
+  useEffect(() => {
+    const tree = treeRef.current;
+    const scroller = tree?.parentElement;
+    if (!scroller) return;
+
+    const updateViewport = () => {
+      setViewport({ scrollTop: scroller.scrollTop, height: scroller.clientHeight });
+    };
+
+    updateViewport();
+    scroller.addEventListener("scroll", updateViewport, { passive: true });
+    const resizeObserver = new ResizeObserver(updateViewport);
+    resizeObserver.observe(scroller);
+    return () => {
+      scroller.removeEventListener("scroll", updateViewport);
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // Clear selection on Escape
   useEffect(() => {
@@ -449,9 +474,24 @@ export function FileTree({ rootPath }: FileTreeProps) {
     return <div className="px-2 text-[13px] text-[var(--text-muted)]">No files</div>;
   }
 
+  const shouldVirtualize = flatItems.length > VIRTUALIZE_AFTER && viewport.height > 0;
+  const startIndex = shouldVirtualize
+    ? Math.max(0, Math.floor(viewport.scrollTop / ROW_HEIGHT) - VIRTUAL_OVERSCAN)
+    : 0;
+  const endIndex = shouldVirtualize
+    ? Math.min(
+        flatItems.length,
+        Math.ceil((viewport.scrollTop + viewport.height) / ROW_HEIGHT) + VIRTUAL_OVERSCAN,
+      )
+    : flatItems.length;
+  const visibleItems = flatItems.slice(startIndex, endIndex);
+  const topSpacer = shouldVirtualize ? startIndex * ROW_HEIGHT : 0;
+  const bottomSpacer = shouldVirtualize ? (flatItems.length - endIndex) * ROW_HEIGHT : 0;
+
   return (
-    <div className="flex flex-col gap-px py-2" role="tree" aria-label="File tree">
-      {flatItems.map((item) => (
+    <div ref={treeRef} className="flex flex-col gap-px py-2" role="tree" aria-label="File tree">
+      {topSpacer > 0 ? <div aria-hidden="true" style={{ height: topSpacer }} /> : null}
+      {visibleItems.map((item) => (
         <FileTreeNode
           key={item.entry.path}
           entry={item.entry}
@@ -467,6 +507,7 @@ export function FileTree({ rootPath }: FileTreeProps) {
           onRenameCancel={handleRenameCancel}
         />
       ))}
+      {bottomSpacer > 0 ? <div aria-hidden="true" style={{ height: bottomSpacer }} /> : null}
     </div>
   );
 }

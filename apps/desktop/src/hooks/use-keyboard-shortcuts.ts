@@ -3,6 +3,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { createSettingsTab, useEditorStore } from "@/stores/editor-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
+import { useSettingsStore } from "@/stores/settings-store";
 
 function isEditableTargetFocused(): boolean {
   const active = document.activeElement;
@@ -113,6 +114,31 @@ export function useKeyboardShortcuts() {
         if (n < tabs.length) {
           setActiveTab(tabs[n]!.id);
         }
+        return;
+      }
+
+      // Cmd+= / Cmd++ — increase editor font size
+      if (mod && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        const current = Number(useSettingsStore.getState().getSetting("editor.font-size") ?? 16);
+        const next = current + 1;
+        if (next <= 32) void useSettingsStore.getState().setSetting("editor.font-size", next);
+        return;
+      }
+
+      // Cmd+- — decrease editor font size
+      if (mod && e.key === "-") {
+        e.preventDefault();
+        const current = Number(useSettingsStore.getState().getSetting("editor.font-size") ?? 16);
+        const next = current - 1;
+        if (next >= 10) void useSettingsStore.getState().setSetting("editor.font-size", next);
+        return;
+      }
+
+      // Cmd+0 — reset editor font size to default
+      if (mod && e.key === "0") {
+        e.preventDefault();
+        void useSettingsStore.getState().setSetting("editor.font-size", 16);
         return;
       }
     }
