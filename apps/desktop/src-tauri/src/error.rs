@@ -10,6 +10,10 @@ pub enum AppError {
     AlreadyExists(String),
     #[error("No workspace is open")]
     NoWorkspace,
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+    #[error("File too large for IPC: {path} ({size} bytes, max {max} bytes)")]
+    FileTooLarge { path: String, size: u64, max: u64 },
 }
 
 impl Serialize for AppError {

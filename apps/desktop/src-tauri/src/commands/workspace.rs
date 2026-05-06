@@ -1,4 +1,6 @@
-use crate::commands::fs::{read_directory_impl, read_file_impl, DirEntry, FileContent};
+use crate::commands::fs::{
+    read_directory_impl, read_file_impl, validate_state_path, DirEntry, FileContent, PathKind,
+};
 use crate::commands::search::index_workspace_impl;
 use crate::error::AppError;
 use crate::ignore::WorkspaceIgnore;
@@ -232,7 +234,8 @@ pub(crate) async fn build_restore_bundle(
         let label = label.to_string();
         tauri::async_runtime::spawn_blocking(move || {
             let state = app.state::<AppState>().get_or_create(&label);
-            read_directory_impl(&path, Some(&state))
+            let path = validate_state_path(&state, &path, PathKind::Existing)?;
+            read_directory_impl(&path.to_string_lossy(), Some(&state))
         })
     };
     let recents_handle = {
@@ -261,9 +264,15 @@ pub(crate) async fn build_restore_bundle(
     // can mount with the file already loaded — saves another sequential IPC
     // and the 40 ms `OPEN_FILE_GRACE_MS` wait on the frontend side.
     let active_file = if let Some(active_path) = active_session_path(session.as_ref()) {
-        tauri::async_runtime::spawn_blocking(move || read_file_impl(&active_path).ok())
-            .await
-            .map_err(|e| AppError::Io(e.to_string()))?
+        let app = app.clone();
+        let label = label.to_string();
+        tauri::async_runtime::spawn_blocking(move || {
+            let state = app.state::<AppState>().get_or_create(&label);
+            let active_path = validate_state_path(&state, &active_path, PathKind::Existing).ok()?;
+            read_file_impl(&active_path.to_string_lossy()).ok()
+        })
+        .await
+        .map_err(|e| AppError::Io(e.to_string()))?
     } else {
         None
     };

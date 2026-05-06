@@ -33,6 +33,8 @@ pub struct WriteResult {
     pub modified_at: u64,
 }
 
+const MAX_IPC_FILE_BYTES: u64 = 10 * 1024 * 1024;
+
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, AppError> + Send + 'static,
 ) -> Result<T, AppError> {
@@ -43,6 +45,7 @@ async fn blocking<T: Send + 'static>(
 
 /// Extract a document title from a markdown file by reading its first few KB.
 /// Priority: YAML frontmatter `title:` field, then leading `# ` heading.
+#[cfg(test)]
 fn extract_title(path: &Path) -> Option<String> {
     use std::io::Read;
 
@@ -87,6 +90,7 @@ fn extract_title(path: &Path) -> Option<String> {
 
 /// Extract a title from the first `# ` heading, which must be the first
 /// non-blank line in the text.
+#[cfg(test)]
 fn extract_leading_h1(text: &str) -> Option<String> {
     for line in text.lines() {
         let trimmed = line.trim();
@@ -114,6 +118,60 @@ fn modified_time(path: &std::path::Path) -> u64 {
                 .as_secs()
         })
         .unwrap_or(0)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum PathKind {
+    Existing,
+    Creatable,
+}
+
+pub fn workspace_root(state: &WorkspaceState) -> Result<PathBuf, AppError> {
+    state
+        .workspace_root
+        .read()
+        .clone()
+        .ok_or(AppError::NoWorkspace)
+}
+
+pub fn validate_workspace_path(
+    workspace_root: &Path,
+    path: impl AsRef<Path>,
+    kind: PathKind,
+) -> Result<PathBuf, AppError> {
+    let root = workspace_root.canonicalize()?;
+    let path = path.as_ref();
+
+    let resolved = match kind {
+        PathKind::Existing => path.canonicalize()?,
+        PathKind::Creatable => {
+            if fs::symlink_metadata(path).is_ok() {
+                path.canonicalize()?
+            } else {
+                let parent = path
+                    .parent()
+                    .ok_or_else(|| AppError::Forbidden("Path has no parent directory".into()))?;
+                let file_name = path
+                    .file_name()
+                    .ok_or_else(|| AppError::Forbidden("Path has no file name".into()))?;
+                parent.canonicalize()?.join(file_name)
+            }
+        }
+    };
+
+    if resolved.starts_with(&root) {
+        Ok(resolved)
+    } else {
+        Err(AppError::Forbidden("Path outside workspace".into()))
+    }
+}
+
+pub fn validate_state_path(
+    state: &WorkspaceState,
+    path: impl AsRef<Path>,
+    kind: PathKind,
+) -> Result<PathBuf, AppError> {
+    validate_workspace_path(&workspace_root(state)?, path, kind)
 }
 
 /// Recursively checks if a directory contains at least one visible .md file.
@@ -217,14 +275,13 @@ pub fn read_directory_impl(
         } else if file_type.is_file() {
             let is_markdown = entry_path.extension().and_then(|e| e.to_str()) == Some("md");
             if is_markdown {
-                let title = extract_title(&entry_path);
                 files.push(DirEntry {
                     name,
                     path: entry_path.to_string_lossy().to_string(),
                     is_dir: false,
                     is_markdown: true,
                     modified_at: modified_time(&entry_path),
-                    title,
+                    title: None,
                 });
             }
         }
@@ -244,13 +301,25 @@ pub async fn read_directory(
     app: tauri::AppHandle,
 ) -> Result<Vec<DirEntry>, AppError> {
     let state = app.state::<AppState>().get_or_create(webview.label());
-    blocking(move || read_directory_impl(&path, Some(&state))).await
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Existing)?;
+        read_directory_impl(&path.to_string_lossy(), Some(&state))
+    })
+    .await
 }
 
 pub fn read_file_impl(path: &str) -> Result<FileContent, AppError> {
     let file_path = PathBuf::from(path);
     if !file_path.exists() {
         return Err(AppError::NotFound(path.to_string()));
+    }
+    let size = fs::metadata(&file_path)?.len();
+    if size > MAX_IPC_FILE_BYTES {
+        return Err(AppError::FileTooLarge {
+            path: path.to_string(),
+            size,
+            max: MAX_IPC_FILE_BYTES,
+        });
     }
     let content = fs::read_to_string(&file_path)?;
     Ok(FileContent {
@@ -261,8 +330,17 @@ pub fn read_file_impl(path: &str) -> Result<FileContent, AppError> {
 }
 
 #[tauri::command]
-pub async fn read_file(path: String) -> Result<FileContent, AppError> {
-    blocking(move || read_file_impl(&path)).await
+pub async fn read_file(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<FileContent, AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Existing)?;
+        read_file_impl(&path.to_string_lossy())
+    })
+    .await
 }
 
 pub fn write_file_impl(path: &str, content: &str) -> Result<WriteResult, AppError> {
@@ -294,9 +372,13 @@ pub async fn write_file(
     // the echo — if another window is watching the same workspace it
     // still sees a genuine file-changed event.
     let state = app.state::<AppState>().get_or_create(webview.label());
-    crate::watcher::record_write(&state, &PathBuf::from(&path));
 
-    blocking(move || write_file_impl(&path, &content)).await
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Existing)?;
+        crate::watcher::record_write(&state, &path);
+        write_file_impl(&path.to_string_lossy(), &content)
+    })
+    .await
 }
 
 pub fn create_file_impl(path: &str) -> Result<FileContent, AppError> {
@@ -317,8 +399,17 @@ pub fn create_file_impl(path: &str) -> Result<FileContent, AppError> {
 }
 
 #[tauri::command]
-pub async fn create_file(path: String) -> Result<FileContent, AppError> {
-    blocking(move || create_file_impl(&path)).await
+pub async fn create_file(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<FileContent, AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Creatable)?;
+        create_file_impl(&path.to_string_lossy())
+    })
+    .await
 }
 
 pub fn create_directory_impl(path: &str) -> Result<DirEntry, AppError> {
@@ -342,8 +433,17 @@ pub fn create_directory_impl(path: &str) -> Result<DirEntry, AppError> {
 }
 
 #[tauri::command]
-pub async fn create_directory(path: String) -> Result<DirEntry, AppError> {
-    blocking(move || create_directory_impl(&path)).await
+pub async fn create_directory(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<DirEntry, AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Creatable)?;
+        create_directory_impl(&path.to_string_lossy())
+    })
+    .await
 }
 
 pub fn rename_entry_impl(old_path: &str, new_path: &str) -> Result<(), AppError> {
@@ -360,8 +460,19 @@ pub fn rename_entry_impl(old_path: &str, new_path: &str) -> Result<(), AppError>
 }
 
 #[tauri::command]
-pub async fn rename_entry(old_path: String, new_path: String) -> Result<(), AppError> {
-    blocking(move || rename_entry_impl(&old_path, &new_path)).await
+pub async fn rename_entry(
+    old_path: String,
+    new_path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let old_path = validate_state_path(&state, &old_path, PathKind::Existing)?;
+        let new_path = validate_state_path(&state, &new_path, PathKind::Creatable)?;
+        rename_entry_impl(&old_path.to_string_lossy(), &new_path.to_string_lossy())
+    })
+    .await
 }
 
 pub fn delete_entry_impl(path: &str) -> Result<(), AppError> {
@@ -374,15 +485,29 @@ pub fn delete_entry_impl(path: &str) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn delete_entry(path: String) -> Result<(), AppError> {
-    blocking(move || delete_entry_impl(&path)).await
+pub async fn delete_entry(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Existing)?;
+        delete_entry_impl(&path.to_string_lossy())
+    })
+    .await
 }
 
 #[tauri::command]
-pub async fn file_exists(path: String) -> bool {
-    tauri::async_runtime::spawn_blocking(move || PathBuf::from(&path).exists())
-        .await
-        .unwrap_or(false)
+pub async fn file_exists(path: String, webview: tauri::Webview, app: tauri::AppHandle) -> bool {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_state_path(&state, &path, PathKind::Existing)
+            .map(|path| path.exists())
+            .unwrap_or(false)
+    })
+    .await
+    .unwrap_or(false)
 }
 
 pub fn reveal_in_file_manager_impl(path: &str) -> Result<(), AppError> {
@@ -404,11 +529,23 @@ pub fn reveal_in_file_manager_impl(path: &str) -> Result<(), AppError> {
     {
         // `explorer /select,<path>` selects the file inside its parent. The
         // comma must be part of the same argument or Windows parses it as a
-        // separator.
-        std::process::Command::new("explorer")
-            .arg(format!("/select,{}", target.display()))
-            .spawn()
-            .map_err(|e| AppError::Io(e.to_string()))?;
+        // separator. Refuse paths containing a literal comma — explorer would
+        // split on it and open the wrong location.
+        let display = target.display().to_string();
+        if display.contains(',') {
+            // Fall back to opening the parent directory so the user still
+            // gets navigated near their file.
+            let parent = target.parent().unwrap_or(&target);
+            std::process::Command::new("explorer")
+                .arg(parent)
+                .spawn()
+                .map_err(|e| AppError::Io(e.to_string()))?;
+        } else {
+            std::process::Command::new("explorer")
+                .arg(format!("/select,{}", display))
+                .spawn()
+                .map_err(|e| AppError::Io(e.to_string()))?;
+        }
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -426,8 +563,17 @@ pub fn reveal_in_file_manager_impl(path: &str) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn reveal_in_file_manager(path: String) -> Result<(), AppError> {
-    blocking(move || reveal_in_file_manager_impl(&path)).await
+pub async fn reveal_in_file_manager(
+    path: String,
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let state = app.state::<AppState>().get_or_create(webview.label());
+    blocking(move || {
+        let path = validate_state_path(&state, &path, PathKind::Existing)?;
+        reveal_in_file_manager_impl(&path.to_string_lossy())
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -463,10 +609,10 @@ mod tests {
         // Remaining should be files, sorted alphabetically
         assert!(!result[1].is_dir);
         assert_eq!(result[1].name, "hello.md");
-        assert_eq!(result[1].title.as_deref(), Some("Hello"));
+        assert!(result[1].title.is_none());
         assert!(!result[2].is_dir);
         assert_eq!(result[2].name, "world.md");
-        assert_eq!(result[2].title.as_deref(), Some("World"));
+        assert!(result[2].title.is_none());
     }
 
     #[test]
@@ -509,6 +655,16 @@ mod tests {
 
         let result = read_file_impl(&path.to_string_lossy()).unwrap();
         assert_eq!(result.content, "# Test Content");
+    }
+
+    #[test]
+    fn test_read_file_rejects_large_ipc_payloads() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("huge.md");
+        fs::write(&path, vec![b'x'; (MAX_IPC_FILE_BYTES + 1) as usize]).unwrap();
+
+        let result = read_file_impl(&path.to_string_lossy());
+        assert!(matches!(result.unwrap_err(), AppError::FileTooLarge { .. }));
     }
 
     #[test]
@@ -586,6 +742,88 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_workspace_path_allows_inside_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("doc.md");
+        fs::write(&path, "content").unwrap();
+
+        let result = validate_workspace_path(dir.path(), &path, PathKind::Existing).unwrap();
+        assert_eq!(result, path.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn test_validate_workspace_path_rejects_outside_absolute_path() {
+        let workspace = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let path = outside.path().join("secret.md");
+        fs::write(&path, "secret").unwrap();
+
+        let result = validate_workspace_path(workspace.path(), &path, PathKind::Existing);
+        assert!(matches!(result.unwrap_err(), AppError::Forbidden(_)));
+    }
+
+    #[test]
+    fn test_validate_workspace_path_rejects_parent_traversal() {
+        let parent = TempDir::new().unwrap();
+        let workspace = parent.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let outside = parent.path().join("outside.md");
+        fs::write(&outside, "secret").unwrap();
+        let traversal = workspace.join("..").join("outside.md");
+
+        let result = validate_workspace_path(&workspace, traversal, PathKind::Existing);
+        assert!(matches!(result.unwrap_err(), AppError::Forbidden(_)));
+    }
+
+    #[test]
+    fn test_validate_workspace_path_allows_inside_creatable_path() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("new.md");
+
+        let result = validate_workspace_path(dir.path(), &path, PathKind::Creatable).unwrap();
+        assert_eq!(result, dir.path().canonicalize().unwrap().join("new.md"));
+    }
+
+    #[test]
+    fn test_validate_workspace_path_rejects_creatable_outside_parent() {
+        let workspace = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let path = outside.path().join("new.md");
+
+        let result = validate_workspace_path(workspace.path(), &path, PathKind::Creatable);
+        assert!(matches!(result.unwrap_err(), AppError::Forbidden(_)));
+    }
+
+    #[test]
+    fn test_validate_workspace_path_allows_existing_inside_creatable_path() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("exists.md");
+        fs::write(&path, "content").unwrap();
+
+        let result = validate_workspace_path(dir.path(), &path, PathKind::Creatable).unwrap();
+        assert_eq!(result, path.canonicalize().unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_workspace_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        let outside_file = outside.path().join("secret.md");
+        fs::write(&outside_file, "secret").unwrap();
+        let link = workspace.path().join("link.md");
+        symlink(&outside_file, &link).unwrap();
+
+        let result = validate_workspace_path(workspace.path(), &link, PathKind::Existing);
+        assert!(matches!(result.unwrap_err(), AppError::Forbidden(_)));
+
+        let result = validate_workspace_path(workspace.path(), &link, PathKind::Creatable);
+        assert!(matches!(result.unwrap_err(), AppError::Forbidden(_)));
+    }
+
+    #[test]
     fn test_error_serializes() {
         let err = AppError::Io("test error".to_string());
         let json = serde_json::to_string(&err).unwrap();
@@ -598,6 +836,21 @@ mod tests {
         let err = AppError::NoWorkspace;
         let json = serde_json::to_string(&err).unwrap();
         assert_eq!(json, "\"No workspace is open\"");
+
+        let err = AppError::Forbidden("Path outside workspace".to_string());
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(json, "\"Forbidden: Path outside workspace\"");
+
+        let err = AppError::FileTooLarge {
+            path: "huge.md".to_string(),
+            size: 11,
+            max: 10,
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(
+            json,
+            "\"File too large for IPC: huge.md (11 bytes, max 10 bytes)\""
+        );
     }
 
     #[test]
