@@ -11,7 +11,7 @@ import {
 import { useNarratorStore } from "./narrator-store";
 import { narratorEngine } from "./narrator-engine";
 import { segmentBlocks } from "./segment-blocks";
-import { PLANNED_ENGINES } from "./engines";
+import { ADAPTERS, PLANNED_ENGINES, type PlannedEngine } from "./engines";
 import { useEditorStore } from "@/stores/editor-store";
 import * as editorApi from "@/hooks/editor-api";
 import { useAllSettings, useSetSetting } from "@/hooks/use-settings";
@@ -50,12 +50,35 @@ export function NarratorTransportBar() {
   const settings = useAllSettings();
   const setSetting = useSetSetting();
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [detectedEngines, setDetectedEngines] = useState<PlannedEngine[]>(PLANNED_ENGINES);
 
   useEffect(() => {
     setVoices(narratorEngine.getVoices());
     return narratorEngine.onVoicesChanged(() => {
       setVoices(narratorEngine.getVoices());
     });
+  }, []);
+
+  // Probe optional adapters (Kokoro, etc.) once on mount. Append any that
+  // report available — they were absent from PLANNED_ENGINES so they only
+  // show up here when the underlying CLI is on the user's PATH.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const extras: PlannedEngine[] = [];
+      for (const adapter of ADAPTERS) {
+        if (PLANNED_ENGINES.some((p) => p.id === adapter.id)) continue;
+        if (await adapter.isAvailable()) {
+          extras.push({ id: adapter.id, displayName: adapter.displayName, status: "available" });
+        }
+      }
+      if (!cancelled && extras.length > 0) {
+        setDetectedEngines([...PLANNED_ENGINES, ...extras]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!isOpen) return null;
@@ -125,9 +148,9 @@ export function NarratorTransportBar() {
           value={activeEngineId}
           onChange={(e) => setActiveEngine(e.target.value)}
           aria-label="Engine"
-          className="max-w-[140px] rounded-md bg-[var(--surface-input)] px-1.5 text-[12px] text-[var(--text-primary)] outline-none h-[var(--chrome-control-height)]"
+          className="max-w-[200px] rounded-md bg-[var(--surface-input)] px-1.5 text-[12px] text-[var(--text-primary)] outline-none h-[var(--chrome-control-height)]"
         >
-          {PLANNED_ENGINES.map((engine) => (
+          {detectedEngines.map((engine) => (
             <option
               key={engine.id}
               value={engine.id}
@@ -140,7 +163,7 @@ export function NarratorTransportBar() {
             </option>
           ))}
         </select>
-        {voices.length > 0 && (
+        {activeEngineId === "apple" && voices.length > 0 && (
           <select
             value={voiceName}
             onChange={(e) => void setSetting("narrator.voice", e.target.value)}

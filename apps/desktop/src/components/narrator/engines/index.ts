@@ -1,13 +1,15 @@
-// Adapter registry. Today only the Apple system-TTS adapter ships — Writer
-// is an ultralight markdown editor and bundling/installing third-party TTS
-// engines (Kokoro, Qwen3, Chatterbox, Fish-Speech) is explicitly out of
-// scope. The TtsAdapter interface stays so we can swap implementations
-// without rewriting call sites if that ever changes.
+// Adapter registry. Apple system TTS is always available. Optional
+// adapters (Kokoro) only show up in the engine picker when the user has
+// installed the underlying CLI on their PATH — Writer never bundles or
+// installs third-party TTS engines.
 
 import type { TtsAdapter } from "./adapter";
 import { appleAdapter } from "./apple";
+import { kokoroAdapter } from "./kokoro";
 
-export const ADAPTERS: TtsAdapter[] = [appleAdapter];
+// All registered adapters. Whether each one is *usable* in the current
+// runtime is decided by isAvailable(), which the picker queries.
+export const ADAPTERS: TtsAdapter[] = [appleAdapter, kokoroAdapter];
 
 export function getAdapterById(id: string): TtsAdapter {
   return ADAPTERS.find((a) => a.id === id) ?? appleAdapter;
@@ -28,6 +30,8 @@ export interface PlannedEngine {
   note?: string;
 }
 
+// Roadmap-style picker entries. Apple always shows; Kokoro only shows
+// after a successful runtime probe (see useDetectedEngines in transport-bar).
 export const PLANNED_ENGINES: PlannedEngine[] = [
   { id: "apple", displayName: "Apple (system voices)", status: "available" },
 ];

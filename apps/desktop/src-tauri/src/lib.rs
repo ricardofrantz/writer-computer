@@ -418,6 +418,8 @@ pub fn run() {
             commands::settings::set_setting,
             commands::settings::reset_setting,
             commands::startup::get_startup_state,
+            commands::tts::kokoro_probe,
+            commands::tts::kokoro_synth,
             #[cfg(target_os = "macos")]
             commands::shell_install::cli_status,
             #[cfg(target_os = "macos")]
