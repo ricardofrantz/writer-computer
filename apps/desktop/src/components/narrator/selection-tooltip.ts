@@ -2,16 +2,14 @@ import { showTooltip, type Tooltip, EditorView } from "@codemirror/view";
 import { StateField } from "@codemirror/state";
 
 function createTooltipDom(view: EditorView, from: number, to: number): HTMLElement {
-  const wrapper = document.createElement("div");
-  wrapper.className =
-    "flex items-center gap-1 rounded-md border border-[var(--line-subtler)] bg-[var(--surface-card)] px-1.5 py-1 backdrop-blur-md";
-
+  // Single compact button — no wrapper card. Drops the chunky border/padding
+  // that was overlapping the line above the selection.
   const button = document.createElement("button");
   button.type = "button";
   button.setAttribute("aria-label", "Narrate selection");
   button.title = "Narrate selection";
   button.className =
-    "flex h-6 w-6 items-center justify-center rounded text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]";
+    "flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface-card)] text-[var(--text-secondary)] shadow-md backdrop-blur-md hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]";
   button.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
 
   button.addEventListener("mousedown", (e) => {
@@ -47,8 +45,7 @@ function createTooltipDom(view: EditorView, from: number, to: number): HTMLEleme
     narratorEngine.play(blocks, { voice, rate, pitch });
   });
 
-  wrapper.appendChild(button);
-  return wrapper;
+  return button;
 }
 
 function getTooltips(state: import("@codemirror/state").EditorState): readonly Tooltip[] {
@@ -58,7 +55,9 @@ function getTooltips(state: import("@codemirror/state").EditorState): readonly T
     {
       pos: sel.from,
       above: true,
-      strictSide: true,
+      // Let CodeMirror flip below when there isn't room above (e.g. the
+      // selection's first line is at the top of the viewport).
+      strictSide: false,
       arrow: false,
       create: (view) => {
         const dom = createTooltipDom(view, sel.from, sel.to);
