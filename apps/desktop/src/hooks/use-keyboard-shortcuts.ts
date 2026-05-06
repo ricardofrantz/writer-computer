@@ -4,6 +4,8 @@ import { createSettingsTab, useEditorStore } from "@/stores/editor-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { toggleSidebar } from "@/hooks/use-sidebar";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useNarratorStore } from "@/components/narrator/narrator-store";
+import { narratorEngine } from "@/components/narrator/narrator-engine";
 
 function isEditableTargetFocused(): boolean {
   const active = document.activeElement;
@@ -104,6 +106,19 @@ export function useKeyboardShortcuts() {
         if (idx === -1) return;
         const next = e.shiftKey ? (idx - 1 + tabs.length) % tabs.length : (idx + 1) % tabs.length;
         setActiveTab(tabs[next]!.id);
+        return;
+      }
+
+      // Cmd+Shift+L — toggle narrator (text-to-speech)
+      if (mod && e.shiftKey && (e.key === "l" || e.key === "L")) {
+        e.preventDefault();
+        const narratorState = useNarratorStore.getState();
+        if (narratorState.isOpen) {
+          narratorEngine.stop();
+          narratorState.close();
+        } else {
+          narratorState.open();
+        }
         return;
       }
 

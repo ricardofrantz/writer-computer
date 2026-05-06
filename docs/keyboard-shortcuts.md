@@ -23,6 +23,7 @@ These shortcuts are handled by the global `useKeyboardShortcuts` hook and work r
 | Cmd+= / Cmd++   | Increase editor font size             |
 | Cmd+-           | Decrease editor font size             |
 | Cmd+0           | Reset editor font size                |
+| Cmd+Shift+L     | Open narrator (text-to-speech)        |
 
 ## Editor Formatting
 

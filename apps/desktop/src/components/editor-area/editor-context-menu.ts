@@ -29,6 +29,8 @@ export interface EditorBodyMenuHandlers {
   onOpenLink?: () => void;
   onCopyLink?: () => void;
   onRunCommand?: (id: string) => void;
+  onNarrate?: (kind: "selection" | "from-here") => void;
+  hasSelection?: boolean;
 }
 
 export function buildEditorBodyMenuItemsSpec(
@@ -226,6 +228,16 @@ export function buildEditorBodyMenuItemsSpec(
       id: "copy-link",
       text: "Copy link",
       action: handlers.onCopyLink,
+    });
+  }
+
+  if (handlers.onNarrate) {
+    items.push({ kind: "separator" });
+    items.push({
+      kind: "item",
+      id: "narrate",
+      text: handlers.hasSelection ? "Narrate selection" : "Narrate from here",
+      action: () => handlers.onNarrate!(handlers.hasSelection ? "selection" : "from-here"),
     });
   }
 
