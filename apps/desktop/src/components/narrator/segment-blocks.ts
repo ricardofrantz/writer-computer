@@ -2,7 +2,8 @@
  *  ("quote", "open paren") or that adds awkward pauses. Run AFTER block
  *  segmentation — segmentation is about block boundaries, this is about
  *  "what should the synth actually say". Single-pass regex chain so the
- *  cost stays linear in block length. */
+ *  cost stays linear in block length; runs once per ▶ click, not on the
+ *  editor's hot path. */
 export function sanitizeForTts(text: string): string {
   return (
     text
@@ -21,6 +22,21 @@ export function sanitizeForTts(text: string): string {
       // URL character by character. Match http(s) and www.
       .replace(/https?:\/\/\S+/g, " link ")
       .replace(/\bwww\.\S+/g, " link ")
+      // Emoji — Apple voices narrate "smiling face with smiling eyes" and
+      // Kokoro mumbles. Extended_Pictographic covers all 1,500+ codepoints
+      // including ZWJ-joined compound emoji (👨‍👩‍👧).
+      .replace(/\p{Extended_Pictographic}/gu, " ")
+      // Orphan markdown markers left behind by malformed input
+      // (e.g. "**bold without close" — block-level stripper requires
+      // balanced pairs and skips these). Strip runs of 2+ markers; leave
+      // single * / _ alone since they may be content (multiplication, file
+      // names with underscores).
+      .replace(/\*\*+/g, " ")
+      .replace(/__+/g, " ")
+      .replace(/~~+/g, " ")
+      // Zero-width / formatting whitespace that some TTS engines vocalize
+      // as a glitch — ZWSP, ZWNJ, ZWJ, BOM.
+      .replace(/[​-‍﻿]/g, "")
       // Multiple spaces / leftover whitespace from substitutions above.
       .replace(/\s+/g, " ")
       .trim()
@@ -63,11 +79,19 @@ export function segmentBlocks(
     // Strip links — keep label text
     block = block.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 
+    // Wiki-links — keep alias if present, else page name
+    //   [[Page|alias]] → "alias",  [[Page]] → "Page"
+    block = block.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2");
+    block = block.replace(/\[\[([^\]]+)\]\]/g, "$1");
+
     // Strip bold/italic (order matters: bold before italic)
     block = block.replace(/\*\*([^*]*)\*\*/g, "$1");
     block = block.replace(/__([^_]*)__/g, "$1");
     block = block.replace(/\*([^*]*)\*/g, "$1");
     block = block.replace(/_([^_]*)_/g, "$1");
+
+    // Strikethrough — keep inner text
+    block = block.replace(/~~([^~]+)~~/g, "$1");
 
     // Strip inline code
     block = block.replace(/`([^`]*)`/g, "$1");
