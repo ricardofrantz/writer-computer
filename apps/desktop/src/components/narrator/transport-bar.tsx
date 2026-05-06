@@ -10,29 +10,9 @@ import {
 } from "@hugeicons/core-free-icons";
 import { useNarratorStore } from "./narrator-store";
 import { narratorEngine } from "./narrator-engine";
-import { segmentBlocks } from "./segment-blocks";
+import { narrateActiveDocument } from "./play-actions";
 import { ADAPTERS, PLANNED_ENGINES, type PlannedEngine } from "./engines";
-import { useEditorStore } from "@/stores/editor-store";
-import * as editorApi from "@/hooks/editor-api";
 import { useAllSettings, useSetSetting } from "@/hooks/use-settings";
-
-/** Read the user's live text selection from inside any CodeMirror editor.
- *  CodeMirror renders source text via a contenteditable, so the browser's
- *  selection API mirrors the source string — no need to plumb the
- *  EditorView reference all the way to this component. Returns the empty
- *  string if no selection is in an editor surface. */
-function readEditorSelection(): string {
-  const sel = typeof window === "undefined" ? null : window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return "";
-  // Confirm the selection lives inside a CodeMirror editor — otherwise we
-  // risk grabbing text from the sidebar, settings, etc.
-  const anchor = sel.anchorNode;
-  const inEditor =
-    anchor instanceof Node &&
-    (anchor as Element | Text).parentElement?.closest(".cm-editor") !== null;
-  if (!inEditor) return "";
-  return sel.toString();
-}
 
 interface IconButtonProps {
   label: string;
@@ -65,10 +45,6 @@ export function NarratorTransportBar() {
   const totalBlocks = useNarratorStore((s) => s.totalBlocks);
   const activeEngineId = useNarratorStore((s) => s.activeEngineId);
   const setActiveEngine = useNarratorStore((s) => s.setActiveEngine);
-  // Subscribe reactively so the component re-renders when the active file changes.
-  // We don't use this value directly — editorApi.getActiveFilePath() is called at
-  // play time to ensure we read the latest value.
-  useEditorStore((s) => s.activeFilePath);
   const settings = useAllSettings();
   const setSetting = useSetSetting();
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -115,29 +91,11 @@ export function NarratorTransportBar() {
   if (!isOpen) return null;
 
   function handlePlay() {
-    // Prefer the user's live selection — works for both Apple and Kokoro
-    // engines because CodeMirror's contenteditable mirrors the markdown
-    // source directly (no rendered DOM gap). Falls back to the whole
-    // document when nothing is selected.
-    const selected = readEditorSelection();
-    let text: string;
-    if (selected) {
-      text = selected;
-    } else {
-      const path = editorApi.getActiveFilePath();
-      const file = path ? editorApi.getOpenFile(path) : null;
-      text = file?.content ?? "";
-    }
-    const skipCodeBlocks = (settings["narrator.skip-code-blocks"] as boolean) ?? true;
-    const skipFrontmatter = (settings["narrator.skip-frontmatter"] as boolean) ?? true;
-    const segments = segmentBlocks(text, { skipCodeBlocks, skipFrontmatter });
-    const voiceName = (settings["narrator.voice"] as string) ?? "";
-    const voice = voiceName
-      ? narratorEngine.getVoices().find((v) => v.name === voiceName)
-      : undefined;
-    const rate = (settings["narrator.rate"] as number) ?? 1;
-    const pitch = (settings["narrator.pitch"] as number) ?? 1;
-    narratorEngine.play(segments, { voice, rate, pitch });
+    // Transport ▶ always narrates the whole document. Selection-only
+    // narration lives on dedicated entry points (floating ▶ on the
+    // selection, right-click → Narrate selection) so the two modes don't
+    // surprise each other.
+    narrateActiveDocument();
   }
 
   function handleClose() {
