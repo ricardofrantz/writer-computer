@@ -109,7 +109,7 @@ export function useKeyboardShortcuts() {
       }
 
       // Cmd+Shift+L — toggle narrator (text-to-speech)
-      if (mod && e.shiftKey && e.key === "L") {
+      if (mod && e.shiftKey && (e.key === "l" || e.key === "L")) {
         e.preventDefault();
         const narratorState = useNarratorStore.getState();
         if (narratorState.isOpen) {

@@ -3,6 +3,7 @@
 ## 2026-05-06
 
 - Add narrator mode (Cmd+Shift+L) — read the active document aloud via the system text-to-speech voice. Phase 1 of joelbqz/writer-computer#19 (no per-word highlighting yet).
+- Right-click → "Narrate selection" / "Narrate from here" inside the editor, plus a floating ▶ button when text is selected. Also fix the Cmd+Shift+L shortcut not firing in WKWebView (case-sensitivity bug).
 
 ## 2026-05-04
 

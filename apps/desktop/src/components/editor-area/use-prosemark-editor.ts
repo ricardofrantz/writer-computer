@@ -36,6 +36,7 @@ import {
 import { tableDecorations } from "./table-decorations";
 import { htmlBlockDecorations, htmlBlockParserExtension } from "./html-block-decorations";
 import { mermaidDecorations } from "./mermaid-decorations";
+import { narratorSelectionTooltip } from "../narrator/selection-tooltip";
 import { imageSrcResolver } from "./image-src-resolver";
 import { wikiLinkExtension } from "./wiki-link-extension";
 import {
@@ -315,6 +316,8 @@ function editorBodyContextMenuExtension(
 
       const hasLink = linkHref !== null;
       const filePath = getFilePath();
+      const sel = view.state.selection.main;
+      const hasSelection = sel.from !== sel.to;
 
       void showNativeContextMenu(
         buildEditorBodyMenuItemsSpec(
@@ -373,6 +376,43 @@ function editorBodyContextMenuExtension(
                 cmd({ state: view.state, dispatch: (tr) => view.dispatch(tr) });
               }
             },
+            hasSelection,
+            onNarrate: async (kind) => {
+              const { useNarratorStore } = await import("@/components/narrator/narrator-store");
+              const { narratorEngine } = await import("@/components/narrator/narrator-engine");
+              const { segmentBlocks } = await import("@/components/narrator/segment-blocks");
+              const { useSettingsStore } = await import("@/stores/settings-store");
+
+              const settings = useSettingsStore.getState().settings;
+              const skipCodeBlocks = (settings["narrator.skip-code-blocks"] as boolean) ?? true;
+              const skipFrontmatter = (settings["narrator.skip-frontmatter"] as boolean) ?? true;
+              const voiceName = (settings["narrator.voice"] as string) ?? "";
+              const rate = (settings["narrator.rate"] as number) ?? 1;
+              const pitch = (settings["narrator.pitch"] as number) ?? 1;
+              const voice = voiceName
+                ? narratorEngine.getVoices().find((v) => v.name === voiceName)
+                : undefined;
+
+              let blocks: string[];
+              let startIndex = 0;
+
+              if (kind === "selection") {
+                const text = view.state.sliceDoc(sel.from, sel.to);
+                blocks = segmentBlocks(text, { skipCodeBlocks, skipFrontmatter });
+              } else {
+                const fullText = view.state.doc.toString();
+                blocks = segmentBlocks(fullText, { skipCodeBlocks, skipFrontmatter });
+                const before = fullText.slice(0, sel.head);
+                startIndex = Math.min(
+                  blocks.length - 1,
+                  Math.max(0, before.split(/\n\s*\n/).length - 1),
+                );
+              }
+
+              if (blocks.length === 0) return;
+              useNarratorStore.getState().open();
+              narratorEngine.play(blocks, { voice, rate, pitch, startIndex });
+            },
           },
           hasLink,
         ),
@@ -427,6 +467,7 @@ function createEditorExtensions(
     tableDecorations(),
     htmlBlockDecorations(),
     mermaidDecorations(),
+    narratorSelectionTooltip(),
     imageSrcResolver(getFilePath),
     wikiLinkExtension(getFilePath, isDisposed),
     markdownFormatting,
