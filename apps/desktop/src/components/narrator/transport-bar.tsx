@@ -66,12 +66,21 @@ export function NarratorTransportBar() {
     let cancelled = false;
     void (async () => {
       const extras: PlannedEngine[] = [];
+      console.log(
+        "[narrator] adapter probe starting; ADAPTERS:",
+        ADAPTERS.map((a) => a.id),
+        "PLANNED_ENGINES:",
+        PLANNED_ENGINES.map((p) => p.id),
+      );
       for (const adapter of ADAPTERS) {
         if (PLANNED_ENGINES.some((p) => p.id === adapter.id)) continue;
-        if (await adapter.isAvailable()) {
+        const ok = await adapter.isAvailable();
+        console.log(`[narrator] ${adapter.id}.isAvailable() →`, ok);
+        if (ok) {
           extras.push({ id: adapter.id, displayName: adapter.displayName, status: "available" });
         }
       }
+      console.log("[narrator] extras after probe:", extras);
       if (!cancelled && extras.length > 0) {
         setDetectedEngines([...PLANNED_ENGINES, ...extras]);
       }
