@@ -396,13 +396,16 @@ function editorBodyContextMenuExtension(
               let blocks: string[];
               let startIndex = 0;
 
+              // Re-read selection from live state in case it changed between
+              // contextmenu open and item click.
+              const liveSel = view.state.selection.main;
               if (kind === "selection") {
-                const text = view.state.sliceDoc(sel.from, sel.to);
+                const text = view.state.sliceDoc(liveSel.from, liveSel.to);
                 blocks = segmentBlocks(text, { skipCodeBlocks, skipFrontmatter });
               } else {
                 const fullText = view.state.doc.toString();
                 blocks = segmentBlocks(fullText, { skipCodeBlocks, skipFrontmatter });
-                const before = fullText.slice(0, sel.head);
+                const before = fullText.slice(0, liveSel.head);
                 startIndex = Math.min(
                   blocks.length - 1,
                   Math.max(0, before.split(/\n\s*\n/).length - 1),

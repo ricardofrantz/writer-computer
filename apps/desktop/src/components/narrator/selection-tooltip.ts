@@ -20,7 +20,12 @@ function createTooltipDom(view: EditorView, from: number, to: number): HTMLEleme
   button.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const text = view.state.sliceDoc(from, to);
+    // Read the selection from live state — closure capture goes stale when
+    // CodeMirror reuses the tooltip DOM across selection changes.
+    const sel = view.state.selection.main;
+    const sliceFrom = sel.from !== sel.to ? sel.from : from;
+    const sliceTo = sel.from !== sel.to ? sel.to : to;
+    const text = view.state.sliceDoc(sliceFrom, sliceTo);
     if (!text.trim()) return;
     const { useNarratorStore } = await import("./narrator-store");
     const { narratorEngine } = await import("./narrator-engine");
