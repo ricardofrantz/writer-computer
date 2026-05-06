@@ -1,4 +1,5 @@
 import { FileBrowser } from "./file-browser";
+import { NarratorButton } from "./narrator-button";
 import { SettingsButton } from "./settings-button";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -24,6 +25,7 @@ export function Sidebar() {
           <div className="min-w-0 flex-1">
             <WorkspaceSwitcher />
           </div>
+          <NarratorButton />
           <SettingsButton />
         </div>
       </div>
