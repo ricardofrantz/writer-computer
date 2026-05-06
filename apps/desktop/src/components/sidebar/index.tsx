@@ -1,4 +1,5 @@
 import { FileBrowser } from "./file-browser";
+import { SettingsButton } from "./settings-button";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
 export function Sidebar() {
@@ -19,8 +20,11 @@ export function Sidebar() {
         <div className="min-h-0 flex-1 overflow-hidden">
           <FileBrowser />
         </div>
-        <div className="shrink-0 px-3 py-3">
-          <WorkspaceSwitcher />
+        <div className="flex shrink-0 items-center gap-1.5 px-3 py-3">
+          <div className="min-w-0 flex-1">
+            <WorkspaceSwitcher />
+          </div>
+          <SettingsButton />
         </div>
       </div>
     </div>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-05-06
+
+- Add a settings gear button to the sidebar so users discover Preferences without using search. Closes joelbqz/writer-computer#22.
+
 ## 2026-05-04
 
 - Update the app icon.
